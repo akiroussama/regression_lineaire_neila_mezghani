@@ -72,7 +72,7 @@
         }
         .slide.active { opacity: 1; transform: translateX(0); pointer-events: all; }
         .slide.prev { opacity: 0; transform: translateX(-60px); }
-        .content-single, .content-full { width: 100%; max-width: 1100px; }
+        .content-single, .content-full { width: 100%; max-width: 1100px; transform-origin: center center; transition: transform 0.3s ease; }
         .content-full { max-width: 1200px; }
 
         .slide-header {
@@ -1590,6 +1590,49 @@ ridge_cv.<span class="fn">fit</span>(X_train, y_train)
 
         document.getElementById('total-slides').textContent = totalSlides;
 
+        /* ============ AUTO-FIT ENGINE ============
+         * Measures each slide's content and scales it to fill
+         * the available viewport without overflow.
+         */
+        function autoFitSlide(slideEl) {
+            const content = slideEl.querySelector('.content-single, .content-full');
+            if (!content) return;
+
+            // Reset any previous scaling
+            content.style.transform = '';
+            content.style.transformOrigin = 'center center';
+
+            // Wait for layout to settle
+            requestAnimationFrame(() => {
+                const headerH = 50;
+                const navH = 80;
+                const padV = 60; // vertical padding
+                const padH = 120; // horizontal padding
+                const availH = window.innerHeight - headerH - navH - padV;
+                const availW = window.innerWidth - padH;
+
+                const contentH = content.scrollHeight;
+                const contentW = content.scrollWidth;
+
+                // Scale factor: fit content in available space
+                const scaleH = availH / contentH;
+                const scaleW = availW / contentW;
+                let scale = Math.min(scaleH, scaleW);
+
+                // Clamp: don't shrink below 0.6 or grow beyond 1.25
+                scale = Math.max(0.6, Math.min(1.25, scale));
+
+                // Only apply if meaningfully different from 1
+                if (Math.abs(scale - 1) > 0.03) {
+                    content.style.transform = `scale(${scale.toFixed(3)})`;
+                }
+            });
+        }
+
+        function autoFitAll() {
+            slides.forEach(s => autoFitSlide(s));
+        }
+
         function updateSlide() {
             slides.forEach((slide, index) => {
                 slide.classList.remove('active', 'prev');
@@ -1598,11 +1641,17 @@ ridge_cv.<span class="fn">fit</span>(X_train, y_train)
             });
             document.getElementById('current-slide').textContent = currentSlide + 1;
             document.getElementById('progress-fill').style.width = ((currentSlide + 1) / totalSlides * 100) + '%';
+
+            // Auto-fit the active slide after transition
+            setTimeout(() => autoFitSlide(slides[currentSlide]), 100);
         }
 
         function nextSlide() { if (currentSlide < totalSlides - 1) { currentSlide++; updateSlide(); } }
         function prevSlide() { if (currentSlide > 0) { currentSlide--; updateSlide(); } }
         function goToSlide(index) { if (index >= 0 && index < totalSlides) { currentSlide = index; updateSlide(); } }
+
+        // Re-fit on resize
+        window.addEventListener('resize', () => autoFitSlide(slides[currentSlide]));
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextSlide(); }
@@ -1619,18 +1668,19 @@ ridge_cv.<span class="fn">fit</span>(X_train, y_train)
         });
 
         function exportPDF() {
-            // Save current state
-            const savedSlide = currentSlide;
-
-            // Show all slides for printing
             document.title = 'Régression Linéaire et Polynomiale — SupCom 2026';
-
-            // Trigger print dialog (saves as PDF via browser)
-            window.print();
+            // Auto-fit all slides before printing
+            autoFitAll();
+            setTimeout(() => window.print(), 200);
         }
 
-        // Keyboard shortcut: Ctrl+P also works natively
+        // Initial auto-fit after fonts and images load
         updateSlide();
+        window.addEventListener('load', () => {
+            autoFitAll();
+            // Re-fit active slide after everything is rendered
+            setTimeout(() => autoFitSlide(slides[currentSlide]), 300);
+        });
     </script>
 </body>
 </html>
